@@ -22,6 +22,7 @@
 		0A2E1DAE23B0CAD9009048A5 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2E1DA423B0CAD9009048A5 /* KeychainService.swift */; };
 		0A2E42BC236B0EE900B5C569 /* VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2E42BB236B0EE900B5C569 /* VideoView.swift */; };
 		0A2FF3162363A1DB008FD68B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0A2FF3112363A0BD008FD68B /* Assets.xcassets */; };
+		0A3853D123D852A5002CB19A /* PlayDemoVideo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A3853C723D852A5002CB19A /* PlayDemoVideo.swift */; };
 		0A3FD1EF23A8D50000FE9918 /* CircularProgress in Frameworks */ = {isa = PBXBuildFile; productRef = 0A3FD1EE23A8D50000FE9918 /* CircularProgress */; };
 		0A3FD1F223A9443E00FE9918 /* ResinAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A3FD1F123A9443E00FE9918 /* ResinAPI.swift */; };
 		0A3FD1F423A94A5B00FE9918 /* WifiServiceAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A3FD1F323A94A5B00FE9918 /* WifiServiceAPI.swift */; };
@@ -197,6 +198,7 @@
 		0A2E42BB236B0EE900B5C569 /* VideoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		0A2FF3112363A0BD008FD68B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0A2FF3122363A13B008FD68B /* TridentCockpit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TridentCockpit.entitlements; sourceTree = "<group>"; };
+		0A3853C723D852A5002CB19A /* PlayDemoVideo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PlayDemoVideo.swift; sourceTree = "<group>"; };
 		0A3FD1F123A9443E00FE9918 /* ResinAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResinAPI.swift; sourceTree = "<group>"; };
 		0A3FD1F323A94A5B00FE9918 /* WifiServiceAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WifiServiceAPI.swift; sourceTree = "<group>"; };
 		0A3FD1F523A94FAC00FE9918 /* RecordingsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingsAPI.swift; sourceTree = "<group>"; };
@@ -502,6 +504,7 @@
 				0A7130CC23636AF100817593 /* VideoDecoder.swift */,
 				0A7130D123636AF100817593 /* TridentControl.swift */,
 				0A2E42BB236B0EE900B5C569 /* VideoView.swift */,
+				0A3853C723D852A5002CB19A /* PlayDemoVideo.swift */,
 			);
 			path = DiveViewController;
 			sourceTree = "<group>";
@@ -694,6 +697,7 @@
 				0A98306E23C22FCA00BD234B /* AuxCameraControlView.swift in Sources */,
 				0A7130DA23636AF200817593 /* FloatingViewProtocol.swift in Sources */,
 				0A1A5B8023CE4B2F0038EABE /* Date+Extensions.swift in Sources */,
+				0A3853D123D852A5002CB19A /* PlayDemoVideo.swift in Sources */,
 				0A9E55BF23BC0AFA008F8A9A /* Average.swift in Sources */,
 				0A3FD1F923A9723E00FE9918 /* APIVersion.swift in Sources */,
 				0A82780A23A63B220039A774 /* DashboardViewController.swift in Sources */,

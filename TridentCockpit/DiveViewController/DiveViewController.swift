@@ -28,9 +28,9 @@ class DiveViewController: NSViewController, NSWindowDelegate {
     
     private var lightOn = false
     private var videoSessionId: UUID?
-    var vehicleId: String = ""
     private var rovBeacon: RovBeacon?
-    
+    var vehicleId: String = ""
+    var debugData: Any?
     @Average(5) private var depth: Float
     @Average(10) private var temperature: Double
 
@@ -194,6 +194,14 @@ class DiveViewController: NSViewController, NSWindowDelegate {
     @IBAction func telemetryOverlayAction(_ sender: Any) {
         FastRTPS.send(topic: .rovVideoOverlayModeCommand, ddsData: !Preference.videoOverlayMode ? "on" : "off")
     }
+    
+    #if DEBUG
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            playDemoVideo()
+        }
+    }
+    #endif
     
     override func keyUp(with event: NSEvent) {
         if !tridentControl.processKeyEvent(event: event) {
