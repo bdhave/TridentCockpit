@@ -1,49 +1,63 @@
 /////
 ////  DiveViewController.swift
-///   Copyright © 2019 Dmitriy Borovikov. All rights reserved.
+///   Copyright © 2020 Dmitriy Borovikov. All rights reserved.
 //
 
-import Cocoa
+
+import UIKit
 import SceneKit
+import CoreLocation
 import FastRTPSBridge
+import AVKit
 
-class DiveViewController: NSViewController {
+class DiveViewController: UIViewController, StoryboardInstantiable {
     @IBOutlet weak var videoView: VideoView!
-    @IBOutlet weak var depthLabel: NSTextField!
-    @IBOutlet weak var tempLabel: NSTextField!
-    @IBOutlet weak var batteryTimeLabel: NSTextField!
-    @IBOutlet weak var cameraTimeLabel: NSTextField!
-    @IBOutlet weak var recordingTimeLabel: NSTextField!
 
-    @IBOutlet weak var indicatorsView: NSView!
+    @IBOutlet weak var indicatorsView: UIView!
+    @IBOutlet weak var videoSizingButton: UIButton!
+    @IBOutlet weak var depthLabel: UILabel!
+    @IBOutlet weak var tempLabel: UILabel!
+    @IBOutlet weak var batteryTimeLabel: UILabel!
+    @IBOutlet weak var batterySymbol: UIImageView!
+    @IBOutlet weak var propellerButton: UIButton!
+    @IBOutlet weak var stabilizeSwitch: PWSwitch!
+    @IBOutlet weak var stabilizeLabel: UILabel!
+    
     @IBOutlet weak var cameraControlView: CameraControlView!
-    @IBOutlet weak var propellerButton: NSButton!
-    @IBOutlet weak var lightButton: NSButton!
-    @IBOutlet weak var recordingButton: FlatButton!
-    @IBOutlet weak var tridentView: RovModelView!
+    @IBOutlet weak var recordingButton: CameraButton!
+    @IBOutlet weak var cameraTimeLabel: UILabel!
+    @IBOutlet weak var recordingTimeLabel: UILabel!
 
+    @IBOutlet weak var lightButton: UIButton!
+    @IBOutlet weak var tridentView: RovModelView!
+    @IBOutlet weak var throttleJoystickView: TouchJoystickView!
+    @IBOutlet weak var yawPitchJoystickView: TouchJoystickView!
+    @IBOutlet weak var liveViewContainer: AuxCameraPlayerView!
+
+    private let locationManager = CLLocationManager()
     private var auxCameraView: AuxCameraControlView?
     private var videoDecoder: VideoDecoder!
     private let tridentControl = TridentControl()
-    
+    private var savedCenter: [UIView: CGPoint] = [:]
+
     private var lightOn = false
     private var videoSessionId: UUID?
+    let vehicleId: String
     private var rovBeacon: RovBeacon?
-    var vehicleId: String = ""
-    var debugData: Any?
+    
     @Average(5) private var depth: Float
     @Average(10) private var temperature: Double
 
     private func setupAverage() {
         _depth.configure { [weak self] avg in
             DispatchQueue.main.async {
-                self?.depthLabel.stringValue = String(format: "%.1f", avg)
+                self?.depthLabel.text = String(format: "%.1f", avg)
             }
         }
 
         _temperature.configure { [weak self] avg in
             DispatchQueue.main.async {
-                self?.tempLabel.stringValue = String(format: "%.1f", avg)
+                self?.tempLabel.text = String(format: "%.1f", avg)
             }
         }
     }
@@ -61,7 +75,7 @@ class DiveViewController: NSViewController {
                 time += String(batteryTime % 60) + "m"
             }
             DispatchQueue.main.async {
-                self.batteryTimeLabel.stringValue = time
+                self.batteryTimeLabel.text = time
             }
         }
     }
@@ -74,77 +88,170 @@ class DiveViewController: NSViewController {
             }
             time += String(cameraTime % 60) + "m"
             DispatchQueue.main.async {
-                self.cameraTimeLabel.stringValue = time
+                self.cameraTimeLabel.text = time
             }
         }
     }
+    
+    init?(coder: NSCoder, vehicleId: String) {
+      self.vehicleId = vehicleId
+      super.init(coder: coder)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
 
     #if DEBUG
     deinit {
-        print(className, #function)
+        print(String(describing: self), #function)
     }
     #endif
 
+    // MARK: Overrides
     override func viewDidLoad() {
         super.viewDidLoad()
-        depthLabel.stringValue = "n/a"
-        tempLabel.stringValue = "n/a"
-        batteryTimeLabel.stringValue = "n/a"
-        cameraTimeLabel.stringValue = ""
-        recordingTimeLabel.stringValue = ""
+        depthLabel.text = "n/a"
+        tempLabel.text = "n/a"
+        batteryTimeLabel.text = "n/a"
+        cameraTimeLabel.text = ""
+        recordingTimeLabel.text = ""
         cameraTimeLabel.textColor = .systemGray
+        depthLabel.font = UIFont.monospacedSystemFont(ofSize: 17, weight: .regular)
+        tempLabel.font = UIFont.monospacedSystemFont(ofSize: 17, weight: .regular)
+        throttleJoystickView.delegate = tridentControl
+        yawPitchJoystickView.delegate = tridentControl
+        if let window: UIWindow = {
+            if #available(iOS 13, *) {
+                return UIApplication.shared.windows.first{ $0.isKeyWindow }
+            } else {
+                return UIApplication.shared.keyWindow
+            }
+            }() {
+            let bounds = window.bounds
+            let offset: CGFloat = UITraitCollection.current.verticalSizeClass == .compact ? 185 : 250
+            throttleJoystickView.center = CGPoint(x: bounds.minX + offset, y: bounds.maxY - offset)
+            yawPitchJoystickView.center = CGPoint(x: bounds.maxX - offset, y: bounds.maxY - offset)
+        }
+
+
         setupAverage()
         
-        indicatorsView.wantsLayer = true
-        indicatorsView.layer?.backgroundColor = NSColor(named: "cameraControlBackground")!.cgColor
-        lightButton.roundCorners(withRadius: 5)
-        lightButton.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.1).cgColor
+        indicatorsView.backgroundColor = UIColor(named: "cameraControlBackground")!
+        lightButton.cornerRadius = 5
+        lightButton.backgroundColor = UIColor.white.withAlphaComponent(0.2)
         
         let node = tridentView.modelNode()
         node.orientation = RovQuaternion(x: -0.119873046875, y: 0.99249267578125, z: 0.01611328125, w: 0.01910400390625).scnQuaternion()
         
         tridentControl.setup(delegate: self)
         videoDecoder = VideoDecoder(sampleBufferLayer: videoView.sampleBufferLayer)
-        view.wantsLayer = true
-        self.view.layer?.backgroundColor = NSColor.black.cgColor
+        setVideoSizing(fill: Preference.videoSizingFill)
 
-        cameraControlView.addConstraints(defX: view.frame.minX + cameraControlView.frame.midX,
-                                         defY: view.frame.midY)
-        tridentView.addConstraints(defX: view.frame.maxX - tridentView.frame.midX,
-                                   defY: view.frame.minY + tridentView.frame.midY)
+        liveViewContainer.isHidden = true
         if Gopro3API.isConnected {
-            auxCameraView = AuxCameraControlView.instantiate(superView: view)
-        }
-        view.postsFrameChangedNotifications = true
-        NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: nil, queue: nil) { [weak self] _ in
-            self?.cameraControlView.superViewDidResize()
-            self?.tridentView.superViewDidResize()
-            self?.auxCameraView?.superViewDidResize()
+            guard let liveViewController = children.first(where: { $0 is AVPlayerViewController}) as? AVPlayerViewController else { return }
+            auxCameraView = AuxCameraControlView.instantiate(liveViewContainer: liveViewContainer,
+                                                             liveViewController: liveViewController)
+            view.addSubview(auxCameraView!)
+            auxCameraView?.delegate = self
         }
         
         startRTPS()
+        
+        if CLLocationManager.headingAvailable() {
+            locationManager.delegate = self
+            locationManager.startUpdatingHeading()
+        }
     }
 
-    override func viewDidAppear() {
-        super.viewDidAppear()
-        DisplayManager.disableSleep()
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        
+        cameraControlView.superViewDidResize(to: size)
+        tridentView.superViewDidResize(to: size)
+        auxCameraView?.superViewDidResize(to: size)
+        liveViewContainer?.superViewDidResize(to: size)
+    }
+
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        UIApplication.shared.isIdleTimerDisabled = false
+    }
+    
+    override func viewWillLayoutSubviews() {
+        for view in view.subviews where view is SaveCenter {
+            savedCenter[view] = view.center
+        }
+        super.viewWillLayoutSubviews()
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        for (view, center) in savedCenter {
+            view.center = center
+        }
+        savedCenter = [:]
+    }
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        for touch in touches {
+            guard touch.view == view || touch.view is TouchJoystickView else { continue }
+            let location = touch.location(in: view)
+            if location.x < view.bounds.midX {
+                throttleJoystickView.touchBegan(touch: touch)
+            } else {
+                yawPitchJoystickView.touchBegan(touch: touch)
+            }
+        }
+    }
+    
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        for touch in touches {
+            throttleJoystickView.touchMoved(touch: touch)
+            yawPitchJoystickView.touchMoved(touch: touch)
+        }
+    }
+    
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        for touch in touches {
+            throttleJoystickView.touchEnded(touch: touch)
+            yawPitchJoystickView.touchEnded(touch: touch)
+        }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        for touch in touches {
+            throttleJoystickView.touchEnded(touch: touch)
+            yawPitchJoystickView.touchEnded(touch: touch)
+        }
     }
     
     @IBAction func closeButtonPress(_ sender: Any) {
-        let alert = NSAlert()
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
-        alert.messageText = NSLocalizedString("Leave Pilot Mode?", comment: "")
-        alert.informativeText = NSLocalizedString("Are you sure you want to leave?", comment: "")
-        alert.beginSheetModal(for: view.window!) { responce in
-            guard responce == .alertFirstButtonReturn else { return }
+        let alert = UIAlertController(title: NSLocalizedString("Leave Pilot Mode?", comment: ""),
+                                      message: NSLocalizedString("Are you sure you want to leave?", comment: ""),
+                                      preferredStyle: .alert)
+        
+        let okAction = UIAlertAction(title: "Ok", style: .default) { _ in
             self.tridentControl.disable()
             FastRTPS.resignAll()
             self.videoDecoder.cleanup()
-            DisplayManager.enableSleep()
-            
-            self.transitionBack(options: .slideDown)
+            self.auxCameraView?.cleanup()
+            self.dismiss(animated: true)
         }
+        
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        
+        alert.addAction(cancelAction)
+        alert.addAction(okAction)
+        present(alert, animated: true)
     }
     
     @IBAction func recordingButtonPress(_ sender: Any) {
@@ -158,28 +265,8 @@ class DiveViewController: NSViewController {
     @IBAction func propellerButtonPress(_ sender: Any) {
         guard tridentControl.motorSpeed != nil else { return }
         let newSpeed = tridentControl.motorSpeed!.rawValue + 1
-        tridentControl.motorSpeed = TridentControl.MotorSpeed(rawValue: newSpeed)
-        if tridentControl.motorSpeed == nil {
-            tridentControl.motorSpeed = .first
-        }
+        tridentControl.motorSpeed = TridentControl.MotorSpeed(rawValue: newSpeed) ?? .first
         updatePropellerButtonState()
-    }
-    
-    @IBAction func relativeYawAction(_ sender: Any) {
-        let node = tridentView.modelNode()
-        let o = node.orientation
-        let q = RovQuaternion(x: Double(-o.x), y: Double(-o.z), z: Double(-o.y), w: Double(o.w))
-        tridentView.setCameraPos(yaw: Float(-q.yaw))
-
-        NSApplication.shared.mainMenu?.recursiveSearch(tag: 11)!.state = .on
-        NSApplication.shared.mainMenu?.recursiveSearch(tag: 12)!.state = .off
-    }
-    
-    @IBAction func absoluteYawAction(_ sender: Any) {
-        tridentView.setCameraPos(yaw: .pi)
-        
-        NSApplication.shared.mainMenu?.recursiveSearch(tag: 11)!.state = .off
-        NSApplication.shared.mainMenu?.recursiveSearch(tag: 12)!.state = .on
     }
     
     @IBAction func stabilizeAction(_ sender: Any) {
@@ -193,24 +280,8 @@ class DiveViewController: NSViewController {
         FastRTPS.send(topic: .rovVideoOverlayModeCommand, ddsData: !Preference.videoOverlayMode ? "on" : "off")
     }
     
-    #if DEBUG
-    override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 {
-            playDemoVideo()
-        }
-    }
-    #endif
-    
-    override func keyUp(with event: NSEvent) {
-        if !tridentControl.processKeyEvent(event: event) {
-            super.keyUp(with: event)
-        }
-    }
-    
-    override func keyDown(with event: NSEvent) {
-        if !tridentControl.processKeyEvent(event: event) {
-            super.keyDown(with: event)
-        }
+    @IBAction func videoSizingButtonTap(_ sender: UIButton) {
+        setVideoSizing(fill: !Preference.videoSizingFill)
     }
     
     private func setTelemetryOverlay(mode: String) {
@@ -222,17 +293,23 @@ class DiveViewController: NSViewController {
         default:
             assertionFailure("illegal mode: \(mode)")
         }
-        
-        let menuItem = NSApplication.shared.mainMenu?.recursiveSearch(tag: 4)
-        menuItem!.state = Preference.videoOverlayMode ? .on:.off
+    }
+    
+    private func setVideoSizing(fill: Bool) {
+        Preference.videoSizingFill = fill
+        videoSizingButton.isSelected = fill
+        videoView.setGravity(fill: fill)
     }
     
     private func setController(status: RovControllerStatus) {
         guard status.controllerId == .trident else { return }
         Preference.tridentStabilize = (status.state == .enabled)
-        
-        let menuItem = NSApplication.shared.mainMenu?.recursiveSearch(tag: 3)
-        menuItem!.state = Preference.tridentStabilize ? .on:.off
+        stabilizeSwitch.setOn((status.state == .enabled) , animated: true)
+        if status.state == .enabled {
+            stabilizeLabel.text = "Stabilized"
+        } else {
+            stabilizeLabel.text = "Stabilize disabled"
+        }
     }
        
     private func startRTPS() {
@@ -276,10 +353,16 @@ class DiveViewController: NSViewController {
         }
         
         FastRTPS.registerReader(topic: .rovFuelgaugeStatus) { [weak self] (status: RovFuelgaugeStatus) in
-            guard self?.batteryTime == 65535 else { return }
+            guard let self = self else { return }
+            guard self.batteryTime == 65535 else { return }
         
             DispatchQueue.main.async {
-                self?.batteryTimeLabel.stringValue = String(format: "charge: %.0f%%", status.state.percentage * 100)
+                self.batteryTimeLabel.text = String(format: "charge: %.0f%%", status.state.percentage * 100)
+                switch status.state.percentage {
+                case ..<0.10:     self.batterySymbol.image = UIImage(systemName: "battery.0")
+                case 0.10..<0.30: self.batterySymbol.image = UIImage(systemName: "battery.25")
+                default:          self.batterySymbol.image = UIImage(systemName: "battery.100")
+                }
             }
         }
 
@@ -288,7 +371,7 @@ class DiveViewController: NSViewController {
             self.cameraTime = recordingStats.estRemainingRecTimeS / 60
             guard self.cameraTime == 0 else { return }
             DispatchQueue.main.async {
-                if self.recordingButton.activeButtonColor != NSColor(named: "recordActive")! {
+                if !self.recordingButton.isSelected {
                     self.recordingButton.isEnabled = false
                 }
             }
@@ -314,10 +397,9 @@ class DiveViewController: NSViewController {
                     let sec = videoSession.totalDurationS % 60
                     let min = (videoSession.totalDurationS / 60)
                     let hour = videoSession.totalDurationS / 3600
-                    self.recordingTimeLabel.stringValue = String(format: "%2.2d:%2.2d:%2.2d", hour, min, sec)
+                    self.recordingTimeLabel.text = String(format: "%2.2d:%2.2d:%2.2d", hour, min, sec)
                     
-                    self.recordingButton.activeButtonColor = NSColor(named: "recordActive")!
-                    self.recordingButton.buttonColor = NSColor(named: "recordNActive")!
+                    self.recordingButton.isSelected = true
                     self.cameraTimeLabel.textColor = .white
 
                 case .stopped:
@@ -331,23 +413,17 @@ class DiveViewController: NSViewController {
                          .videoSourceNotAlive:
                         break
                     case .unknown:
-                         break
+                        break
                     case .filesystemNospace:
-                        let alert = NSAlert()
-                        alert.messageText = "Stop recording"
-                        alert.informativeText = "No space left"
-                        alert.runModal()
+                        alert(message: "Stop recording", informative: "No space left", delay: 6)
+                        break
                     case .recordingError:
-                        let alert = NSAlert()
-                        alert.messageText = "Stop recording"
-                        alert.informativeText = "Recording error"
-                        alert.runModal()
+                        alert(message: "Stop recording", informative: "Recording error", delay: 6)
                         break
                     }
-                    self.recordingTimeLabel.stringValue = ""
+                    self.recordingTimeLabel.text = ""
                     self.cameraTimeLabel.textColor = .systemGray
-                    self.recordingButton.activeButtonColor = NSColor(named: "stopActive")!
-                    self.recordingButton.buttonColor = NSColor(named: "stopNActive")!
+                    self.recordingButton.isSelected = false
                 }
             }
         }
@@ -366,16 +442,10 @@ class DiveViewController: NSViewController {
                     self.videoSessionId = nil
                 case .rejectedSessionInProgress:
                     self.videoSessionId = nil
-                    let alert = NSAlert()
-                    alert.messageText = "Recording"
-                    alert.informativeText = "Already in progress"
-                    alert.runModal()
+                    alert(message: "Recording", informative: "Already in progress")
                 case .rejectedNoSpace:
                     self.videoSessionId = nil
-                    let alert = NSAlert()
-                    alert.messageText = "Recording"
-                    alert.informativeText = "No space left"
-                    alert.runModal()
+                    alert(message: "Recording", informative: "No space left")
                 }
             }
         }
@@ -386,13 +456,15 @@ class DiveViewController: NSViewController {
                 if lightPower.power > 0 {
                     // Light On
                     self.lightOn = true
-                    self.lightButton.image = NSImage(named: "Light On")
-                    self.lightButton.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.1).cgColor
+                    self.lightButton.setImage(UIImage(systemName: "flashlight.off.fill"), for: .normal)
+                    self.lightButton.tintColor = .white
+                    self.lightButton.backgroundColor = UIColor.black.withAlphaComponent(0.2)
                 } else {
                     // Light Off
                     self.lightOn = false
-                    self.lightButton.image = NSImage(named: "Light Off")
-                    self.lightButton.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.1).cgColor
+                    self.lightButton.setImage(UIImage(systemName: "flashlight.on.fill"), for: .normal)
+                    self.lightButton.tintColor = .black
+                    self.lightButton.backgroundColor = UIColor.white.withAlphaComponent(0.2)
                 }
             }
         }
@@ -436,7 +508,6 @@ class DiveViewController: NSViewController {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoDate = formatter.string(from: Date())
         let metadata = #"{"start_ts":"\#(isoDate)"}"#
-
         let videoSessionCommand = RovVideoSessionCommand(sessionID: id.uuidString.lowercased(),
                                                          metadata: metadata,
                                                          request: .recording,
@@ -473,16 +544,13 @@ extension DiveViewController: TridentControlDelegate {
     func updatePropellerButtonState() {
         switch tridentControl.motorSpeed {
         case .first?:
-            propellerButton.isHidden = false
-            propellerButton.image = NSImage(named: "Prop 1")
+            propellerButton.setImage(UIImage(named: "Prop 1"), for: .normal)
         case .second?:
-            propellerButton.isHidden = false
-            propellerButton.image = NSImage(named: "Prop 2")
+            propellerButton.setImage(UIImage(named: "Prop 2"), for: .normal)
         case .third?:
-            propellerButton.isHidden = false
-            propellerButton.image = NSImage(named: "Prop 3")
+            propellerButton.setImage(UIImage(named: "Prop 3"), for: .normal)
         case nil:
-            propellerButton.isHidden = true
+            break
         }
     }
     
@@ -499,4 +567,13 @@ extension DiveViewController: TridentControlDelegate {
         }
     }
     
+}
+
+extension DiveViewController: CLLocationManagerDelegate {
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        let heading = newHeading.magneticHeading
+        let cameraHeading = heading + (heading > 180 ? -180 : 180)
+        let yaw = Float(cameraHeading / 180 * .pi)
+        tridentView.setCameraPos(yaw: yaw)
+    }
 }

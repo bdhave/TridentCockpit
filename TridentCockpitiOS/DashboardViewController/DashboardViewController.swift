@@ -1,16 +1,16 @@
 /////
 ////  DashboardViewController.swift
-///   Copyright © 2019 Dmitriy Borovikov. All rights reserved.
+///   Copyright © 2020 Dmitriy Borovikov. All rights reserved.
 //
 
-import Cocoa
+
+import UIKit
 import FastRTPSBridge
-import CircularProgress
 import Moya
 import PromiseKit
 import SwiftSH
 
-class DashboardViewController: NSViewController {
+class DashboardViewController: UIViewController {
     let stdParticipantList: Set<String> = ["geoserve", "trident-core", "trident-control", "trident-update", "trident-record"]
     var tridentParticipants: Set<String> = []
     var tridentID: String!
@@ -18,7 +18,6 @@ class DashboardViewController: NSViewController {
     var connectionInfo: [ConnectionInfo] = []
     var ddsListener: DDSDiscoveryListener!
     private var sshCommand: SSHCommand!
-    private var spinner: CircularProgress?
     private var timer: Timer? {
         willSet { timer?.invalidate() }
     }
@@ -30,13 +29,13 @@ class DashboardViewController: NSViewController {
             guard let ipAddress = deviceState?.ipAddress else { return }
                 let addrs = ipAddress.split(separator: " ")
                 if addrs.count >= 2 {
-                    tridentNetworkAddressLabel.stringValue = String(addrs.first{ $0.contains("10.1.1.") } ?? "n/a")
-                    payloadAddress.stringValue = String(addrs.first{ !$0.contains("10.1.1.") } ?? "n/a")
-                    toolbar.getItem(for: .connectCamera)?.isEnabled = true
+                    tridentNetworkAddressLabel.text = String(addrs.first{ $0.contains("10.1.1.") } ?? "n/a")
+                    payloadAddress.text = String(addrs.first{ !$0.contains("10.1.1.") } ?? "n/a")
+                    navigationItem.getItem(for: .connectCamera)?.isEnabled = true
                 } else {
-                    tridentNetworkAddressLabel.stringValue = connectedSSID != nil ? "n/a" : String(addrs[0])
-                    payloadAddress.stringValue = connectedSSID != nil ? String(addrs[0]) : "n/a"
-                    toolbar.getItem(for: .connectCamera)?.isEnabled = false
+                    tridentNetworkAddressLabel.text = connectedSSID != nil ? "n/a" : String(addrs[0])
+                    payloadAddress.text = connectedSSID != nil ? String(addrs[0]) : "n/a"
+                    navigationItem.getItem(for: .connectCamera)?.isEnabled = false
                 }
             
         }
@@ -44,29 +43,24 @@ class DashboardViewController: NSViewController {
     var connectedSSID: String? = "\nnot existed\n" {
         didSet {
             guard connectedSSID != oldValue else { return }
-            guard let wifiItem = toolbar.getItem(for: .connectWiFi),
-                let button = wifiItem.view as? NSButton else { return }
+            guard let wifiItem = navigationItem.getItem(for: .connectWiFi) else { return }
             if connectedSSID != nil {
-                ssidLabel.stringValue = self.connectedSSID!
-//                toolbar.getItem(for: .connectCamera)?.isEnabled = true
-                
-                wifiItem.label = NSLocalizedString("Disconnect", comment: "")
-                wifiItem.toolTip = NSLocalizedString("Disconnect Trident WiFi", comment: "")
-                button.image = NSImage(named: "wifi.slash")!
-                if payloadAddress.stringValue == "n/a" {
-                    payloadAddress.stringValue = "waiting..."
+                ssidLabel.text = self.connectedSSID!
+                navigationItem.getItem(for: .connectCamera)?.isEnabled = true
+
+                wifiItem.image = UIImage(systemName: "wifi.slash")
+                if payloadAddress.text == "n/a" {
+                    payloadAddress.text = "waiting..."
                 }
             } else {
-                ssidLabel.stringValue = "not connected"
-                cameraModelLabel.stringValue = "n/a"
-                cameraFirmwareLabel.stringValue = "n/a"
-                payloadAddress.stringValue = "n/a"
+                ssidLabel.text = "not connected"
+                cameraModelLabel.text = "n/a"
+                cameraFirmwareLabel.text = "n/a"
+                payloadAddress.text = "n/a"
                 Gopro3API.cameraPassword = nil
-                toolbar.getItem(for: .connectCamera)?.isEnabled = false
+                navigationItem.getItem(for: .connectCamera)?.isEnabled = false
 
-                wifiItem.label = NSLocalizedString("Connect", comment: "")
-                wifiItem.toolTip = NSLocalizedString("Connect Trident WiFi", comment: "")
-                button.image = NSImage(named: "wifi")!
+                wifiItem.image = UIImage(systemName: "wifi")
                 Gopro3API.cameraPassword = nil
             }
         }
@@ -74,85 +68,66 @@ class DashboardViewController: NSViewController {
 
     
     // MARK: Outlets
-    @IBOutlet var toolbar: NSToolbar!
-    @IBOutlet weak var gridView: NSGridView!
-    @IBOutlet weak var tridentIdLabel: NSTextField!
-    @IBOutlet weak var connectionAddress: NSTextField!
-    @IBOutlet weak var tridentNetworkAddressLabel: NSTextField!
-    @IBOutlet weak var localAddressLabel: NSTextField!
-    @IBOutlet weak var ssidLabel: NSTextField!
-    @IBOutlet weak var payloadAddress: NSTextField!
-    @IBOutlet weak var cameraModelLabel: NSTextField!
-    @IBOutlet weak var cameraFirmwareLabel: NSTextField!
+    @IBOutlet weak var tridentIdLabel: UILabel!
+    @IBOutlet weak var connectionAddress: UILabel!
+    @IBOutlet weak var tridentNetworkAddressLabel: UILabel!
+    @IBOutlet weak var localAddressLabel: UILabel!
+    @IBOutlet weak var ssidLabel: UILabel!
+    @IBOutlet weak var payloadAddress: UILabel!
+    @IBOutlet weak var cameraModelLabel: UILabel!
+    @IBOutlet weak var cameraFirmwareLabel: UILabel!
     
     
     // MARK: Overrides
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        gridView.isHidden = true
-        parent?.view.wantsLayer = true
-        parent?.view.layer?.contents = NSImage(named: "Trident")
-        spinner = addCircularProgressView(to: view)
+        view.layer.contentsGravity = .resizeAspectFill
+        addCircularProgressView(to: view)
         setupNotifications()
         ddsDiscoveryStart()
     }
     
-    override func viewDidAppear() {
-        super.viewDidAppear()
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        view.layer.contents = UIImage(named: "Trident")?.cgImage
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
 
-        if view.window?.toolbar == nil {
-            let wifiItem = toolbar.getItem(for: .connectWiFi)
-            let button = wifiItem?.view as? NSButton
-            // hack!!!
-            button?.image = NSImage(named: "wifi.slash")!
-            button?.image = NSImage(named: "wifi")!
-        }
-        view.window?.toolbar = toolbar
-        toolbar.isVisible = true
-        
         if FastRTPS.remoteAddress != "" {
             startRefreshDeviceState()
         } else {
-            toolbar.items.forEach{ $0.isEnabled = false }
+            navigationController?.navigationItem.leftBarButtonItems?.forEach{ $0.isEnabled = false }
         }
     }
     
-    override func viewWillDisappear() {
-        super.viewWillDisappear()
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
         timer = nil
     }
     
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        view.layer.contents = nil       // save memory
+    }
+    
     // MARK: Actions
-    @IBAction func goDiveScreen(_ sender: Any?) {
-        self.toolbar.isVisible = false
-        let diveViewController: DiveViewController = DiveViewController.instantiate()
-        diveViewController.vehicleId = tridentID
-        transition(to: diveViewController, options: .slideUp) {
-            self.toolbar.isVisible = false
-        }
+    @IBSegueAction
+    private func goDiveScreen(coder: NSCoder) -> DiveViewController? {
+        return DiveViewController(coder: coder, vehicleId: tridentID)
     }
-
-    @IBAction func goMaintenanceScreen(_ sender: Any?) {
-        let maintenanceViewController: MaintenanceViewController = MaintenanceViewController.instantiate()
-        transition(to: maintenanceViewController, options: .slideLeft)
-    }
-
-    @IBAction func goPastDivesScreen(_ sender: Any?) {
-        let pastDivesViewController: PastDivesViewController = PastDivesViewController.instantiate()
-        transition(to: pastDivesViewController, options: .slideLeft)
-    }
-
-    @IBAction func connectWifiButtonPress(_ sender: Any?) {
-        guard let button = sender as? NSButton else { return }
+    
+    @IBAction func connectWifiButtonPress(_ sender: UIBarButtonItem) {
         if connectedSSID == nil {
-            connectWiFi(view: button.superview!)
+            connectWiFi(view: sender.view!)
         } else {
             disconnectWiFi()
         }
     }
 
-    @IBAction func connectCameraButtonPress(_ sender: Any?) {
+    @IBAction func connectCameraButtonPress(_ sender: UIBarButtonItem) {
         guard let ipAddress = deviceState?.ipAddress, ipAddress.split(separator: " ").count == 2 else { return }
         executeScript(name: "PayloadProvision") {
             self.connectGopro3()
@@ -160,26 +135,16 @@ class DashboardViewController: NSViewController {
     }
 
     // MARK: Private func
-    private func addCircularProgressView(to view: NSView) -> CircularProgress {
-        let spinner = CircularProgress(size: 200)
-        spinner.lineWidth = 4
-        spinner.isIndeterminate = true
-        spinner.color = NSColor.systemTeal
-        spinner.translatesAutoresizingMaskIntoConstraints = false
-
-        let textLabel = NSTextField(labelWithString: "Searching for Trident")
-        textLabel.translatesAutoresizingMaskIntoConstraints = false
-        spinner.addSubview(textLabel)
-        view.addSubview(spinner)
-        NSLayoutConstraint.activate([
-            spinner.widthAnchor.constraint(equalToConstant: 200),
-            spinner.heightAnchor.constraint(equalToConstant: 200),
-            textLabel.centerXAnchor.constraint(equalTo: spinner.centerXAnchor),
-            textLabel.centerYAnchor.constraint(equalTo: spinner.centerYAnchor),
-            view.centerXAnchor.constraint(equalTo: spinner.centerXAnchor),
-            view.centerYAnchor.constraint(equalTo: spinner.centerYAnchor),
-        ])
-        return spinner
+    private func addCircularProgressView(to view: UIView) {
+        navigationController?.navigationBar.isHidden = true
+        view.subviews.forEach{ $0.isHidden = true }
+        SwiftSpinner.showBlurBackground = false
+        SwiftSpinner.useContainerView(view)
+        SwiftSpinner.shared.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        SwiftSpinner.shared.titleLabel.textColor = .black
+        SwiftSpinner.shared.outerColor = .systemTeal
+        SwiftSpinner.shared.innerColor = .lightGray
+        SwiftSpinner.show("Searching for Trident")
     }
 
     private func startRefreshDeviceState() {
@@ -191,7 +156,7 @@ class DashboardViewController: NSViewController {
             self.refreshDeviceState()
         }
     }
-
+    
     private func refreshDeviceState() {
         RestProvider.request(MultiTarget(WiFiServiceAPI.connection))
             .done { (connectionInfo: [ConnectionInfo]) in
@@ -205,10 +170,11 @@ class DashboardViewController: NSViewController {
             switch error {
             case NetworkError.unaviable(let message):
                 self.timer = nil
-                self.view.window?.alert(message: "Trident connection lost", informative: message, delay: 5)
+                alert(message: "Trident connection lost", informative: message, delay: 5)
             default:
-                self.view.window?.alert(error: error, delay: 5)
+                error.alert(delay: 5)
             }
+            
         }
     }
     
@@ -220,26 +186,30 @@ class DashboardViewController: NSViewController {
             self.connectedSSID = nil
             self.executeScript(name: "PayloadCleanup") {}
         }.catch {
-            self.view.window?.alert(error: $0)
+            $0.alert()
         }
     }
 
-    private func connectWiFi(view: NSView) {
+    private func connectWiFi(view: UIView) {
         RestProvider.request(MultiTarget(WiFiServiceAPI.scan))
         .then {
             RestProvider.request(MultiTarget(WiFiServiceAPI.ssids))
         }.done { (ssids: [SSIDInfo]) -> Void in
             self.showPopup(with: ssids.filter{!$0.ssid.contains("Trident-")}, view: view)
         }.catch {
-            self.view.window?.alert(error: $0)
+            $0.alert()
         }
     }
 
-    private func showPopup(with ssids: [SSIDInfo], view: NSView) {
-        let controller: WiFiPopupViewController = WiFiPopupViewController.instantiate()
+    private func showPopup(with ssids: [SSIDInfo], view: UIView) {
+        let controller: WiFiPopupViewController = WiFiPopupViewController()
         controller.delegate = self
         controller.ssids = ssids
-        present(controller, asPopoverRelativeTo: .zero, of: view, preferredEdge: .minY, behavior: .transient)
+        controller.modalPresentationStyle = .popover
+        let popover = controller.popoverPresentationController
+        popover?.sourceView = view
+        popover?.sourceRect = view.frame
+        present(controller, animated: true)
     }
 
     private func executeScript(name: String, completion: @escaping (() -> Void)) {
@@ -270,16 +240,14 @@ class DashboardViewController: NSViewController {
                     let logStrings = log.split(separator: "\n")
                     if logStrings.last != "OK-SCRIPT" {
                         let fileredLog = logStrings.filter{ !$0.contains("sudo: unable to resolve host") && !$0.contains("START-SCRIPT") }.reduce("") { $0 + $1 + "\n"}
-                        self.view.window?.alert(message: "Error while execute \(name)", informative: fileredLog, delay: 100)
+                        alert(message: "Error while execute \(name)", informative: fileredLog, delay: 100)
                         print(fileredLog)
                     } else {
                         print("Script \(name) ok")
                         completion()
                     }
                 } else {
-                    if let error = error {
-                        self.view.window?.alert(error: error)
-                    }
+                    error?.alert()
                 }
                 self.sshCommand.disconnect {}
         }
@@ -299,10 +267,10 @@ class DashboardViewController: NSViewController {
             }
         }.done { data in
             let model = Gopro3API.getString(from: data.advanced(by: 3))
-            self.cameraModelLabel.stringValue = model[1]
-            self.cameraFirmwareLabel.stringValue = model[0]
+            self.cameraModelLabel.text = model[1]
+            self.cameraFirmwareLabel.text = model[0]
         }.catch {
-            self.view.window?.alert(error: $0)
+            $0.alert()
         }
     }
 
@@ -346,9 +314,9 @@ class DashboardViewController: NSViewController {
     // MARK: Internal func
     func setDisconnectedState() {
         timer = nil
-        
         let message = "Trident disconnected"
-        if let otherViewController = self.parent?.children.first(where: { $0 != self}) {
+        if let otherViewController = presentedViewController ?? navigationController?.topViewController,
+            !(otherViewController is UIAlertController) {
             let info: String
             switch otherViewController {
             case is DiveViewController:
@@ -357,44 +325,52 @@ class DashboardViewController: NSViewController {
                 info = "Connection to Trident lost. Exiting Maintenance Mode."
             case is PastDivesViewController:
                 info = "Connection to Trident lost. Exiting Past Dives Mode."
+            case self:
+                info = "Connection to Trident lost."
             default:
                 fatalError()
             }
-            let alert = NSAlert()
-            alert.messageText = message
-            alert.informativeText = info
-            alert.alertStyle = .warning
-            alert.beginSheetModal(for: otherViewController.view.window!) { responce in
-                otherViewController.transitionBack(options: .crossfade)
+            let alert = UIAlertController(title: message, message: info, preferredStyle: .alert)
+            let action = UIAlertAction(title: "Dismiss", style: .cancel) { _ in
+                guard otherViewController != self else { return }
+                if self.presentedViewController != nil {
+                    otherViewController.dismiss(animated: true)
+                } else {
+                    self.navigationController?.popViewController(animated: true)
+                }
             }
+            alert.addAction(action)
+
+            otherViewController.present(alert, animated: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(10)) { [weak alert] in
                 guard let alert = alert else { return }
-                otherViewController.view.window!.endSheet(alert.window, returnCode: .cancel)
+                alert.dismiss(animated: true) {
+                    guard otherViewController != self else { return }
+                    if self.presentedViewController != nil {
+                        otherViewController.dismiss(animated: true)
+                    } else {
+                        self.navigationController?.popViewController(animated: true)
+                    }
+                }
             }
             
         }
         FastRTPS.deleteParticipant()
-        toolbar.items.forEach{ $0.isEnabled = false }
+        navigationItem.leftBarButtonItems?.forEach{ $0.isEnabled = false }
         connectedSSID = nil
         deviceState = nil
-        gridView.isHidden = true
-        view.layer?.backgroundColor = nil
-        spinner = addCircularProgressView(to: view)
+        addCircularProgressView(to: view)
         ddsDiscoveryStart()
     }
     
     func setConnectedState() {
-        if let spinner = spinner {
-            spinner.isIndeterminate = false
-            spinner.removeFromSuperview()
-        }
+        SwiftSpinner.hide()
+        navigationController?.navigationBar.isHidden = false
+        view.subviews.forEach{ $0.isHidden = false }
         
-        view.layer?.backgroundColor = NSColor(named: "splashColor")!.cgColor
-        gridView.isHidden = false
-        
-        tridentIdLabel.stringValue = tridentID
-        localAddressLabel.stringValue = FastRTPS.localAddress
-        connectionAddress.stringValue = FastRTPS.remoteAddress
+        tridentIdLabel.text = tridentID
+        localAddressLabel.text = FastRTPS.localAddress
+        connectionAddress.text = FastRTPS.remoteAddress
         
         startRefreshDeviceState()
         RestProvider.request(MultiTarget(WiFiServiceAPI.connection))
@@ -405,14 +381,9 @@ class DashboardViewController: NSViewController {
                 self.connectedSSID = nil
             }
         }.catch {
-            self.view.window?.alert(error: $0)
+            $0.alert()
         }
-        if let toolbar = view.window?.toolbar {
-            toolbar.getItem(for: .goDive)?.isEnabled = true
-            toolbar.getItem(for: .goMaintenance)?.isEnabled = true
-            toolbar.getItem(for: .goPastDives)?.isEnabled = true
-            toolbar.getItem(for: .connectWiFi)?.isEnabled = true
-        }
+        navigationItem.getItem(for: .connectWiFi)?.isEnabled = true
         FastRTPS.setPartition(name: tridentID)
     }
 }
@@ -435,7 +406,7 @@ extension DashboardViewController: WiFiPopupProtocol {
             self.connectionInfo = connectionInfo
             self.startRefreshDeviceState()
         }.catch {
-            self.view.window?.alert(error: $0)
+            $0.alert()
         }
     }
 }

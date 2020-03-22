@@ -1,9 +1,9 @@
 /////
 ////  Preferences.swift
-///   Copyright © 2019 Dmitriy Borovikov. All rights reserved.
+///   Copyright © 2020 Dmitriy Borovikov. All rights reserved.
 //
 
-import Cocoa
+import UIKit
 
 struct Preference {
     @UserPreference("CameraControlViewCPV")
@@ -24,9 +24,19 @@ struct Preference {
     @UserPreference("AuxCameraControlViewCPH")
     static var auxCameraControlViewCPH: CGFloat?
 
+    @UserPreference("AuxCameraPlayerViewCPV")
+    static var auxCameraPlayerViewCPV: CGFloat?
+
+    @UserPreference("AuxCameraPlayerViewCPH")
+    static var auxCameraPlayerViewCPH: CGFloat?
+
     @UserPreferenceWithDefault("TridentStabilize", defaultValue: true)
     static var tridentStabilize: Bool
     
     @UserPreferenceWithDefault("VideoOverlayMode", defaultValue: true)
     static var videoOverlayMode: Bool
+    
+    @UserPreferenceWithDefault("VideoSizingFill", defaultValue: true)
+    static var videoSizingFill: Bool
+
 }
