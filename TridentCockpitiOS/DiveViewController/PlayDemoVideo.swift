@@ -30,7 +30,7 @@ extension DiveViewController {
         let player = AVPlayer(url: videoURL)
         let playerLayer = createPlayerLayer(on: videoView)
         playerLayer.player = player
-        
+        playerLayer.videoGravity = .resizeAspectFill
         player.play()
         player.seek(to: .init(seconds: 5, preferredTimescale: 10000))
         
