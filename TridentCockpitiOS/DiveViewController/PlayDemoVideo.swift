@@ -19,15 +19,14 @@ extension DiveViewController {
     }
     
     func playDemoVideo() {
+        guard let filePath = ProcessInfo.processInfo.environment["demoVideo"] else { return }
         FastRTPS.removeReader(topic: .rovDepth)
         FastRTPS.removeReader(topic: .rovTempWater)
         FastRTPS.removeReader(topic: .rovCamFwdH2640Video)
         depthLabel.text = "12.4"
         tempLabel.text = "28.3"
         
-        let moviesFolder = FileManager.default.urls(for: .documentDirectory, in: .allDomainsMask).first!
-        print(moviesFolder)
-        let videoURL = moviesFolder.appendingPathComponent("DemoVideo.mp4")
+        let videoURL = URL(fileURLWithPath: filePath)
         let player = AVPlayer(url: videoURL)
         let playerLayer = createPlayerLayer(on: videoView)
         playerLayer.player = player
